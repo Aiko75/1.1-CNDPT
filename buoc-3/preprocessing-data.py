@@ -92,3 +92,5 @@ print(f"Duplicates found: {duplicates}")
 
 # Remove them
 df = df.drop_duplicates(subset=['product_id'])
+
+df.to_csv("amazon_preprocessed.csv", index=False)
