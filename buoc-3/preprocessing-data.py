@@ -115,7 +115,7 @@ def remove_emojis(text):
 
 # 3. Apply to specific text columns
 # These are the columns most likely to contain emojis in your dataset
-cols_to_clean = ['review_content', 'review_title']
+cols_to_clean = ['review_content', 'review_title', 'about_product', 'product_name']
 
 for col in cols_to_clean:
     if col in df.columns:
