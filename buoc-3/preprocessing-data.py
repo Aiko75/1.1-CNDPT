@@ -1,130 +1,114 @@
 import pandas as pd
 import numpy as np
-
-# 1. Load Data
-df = pd.read_csv('amazon_cleaned.csv')
-
-# Function to clean currency strings (removes '₹' and ',')
-def clean_currency(x):
-    if isinstance(x, str):
-        x = x.replace('₹', '').replace(',', '').strip()
-    return x
-
-# Function to clean percentage strings (removes '%')
-def clean_percent(x):
-    if isinstance(x, str):
-        x = x.replace('%', '').strip()
-    return x
-
-# Apply cleaning to Price columns
-df['discounted_price'] = df['discounted_price'].apply(clean_currency).astype(float)
-df['actual_price'] = df['actual_price'].apply(clean_currency).astype(float)
-
-# Apply cleaning to Discount Percentage
-df['discount_percentage'] = df['discount_percentage'].apply(clean_percent).astype(float)
-
-# Fix 'rating_count' (remove commas)
-# We use fillna(0) just in case there are missing counts
-df['rating_count'] = df['rating_count'].str.replace(',', '').fillna(0).astype(int)
-
-# --- CRITICAL FIX FOR RATING COLUMN ---
-# This dataset often contains a specific error where one rating is "|".
-# We use 'coerce' to turn that error into NaN, then fill it.
-df['rating'] = pd.to_numeric(df['rating'], errors='coerce').fillna(0)
-
-print("Data Types after cleaning:")
-print(df.dtypes)
-
 import re
+import emoji
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 
-# Download stopwords (run this once)
-nltk.download('stopwords')
+# ---------------------------------------------------------
+# 1. LOAD THE DATA (Output from your previous code)
+# ---------------------------------------------------------
+df = pd.read_csv('amazon_cleaned.csv')
+print(f"Loaded data. Shape: {df.shape}")
 
+# ---------------------------------------------------------
+# 2. CLEANING NUMERICAL COLUMNS (That were skipped previously)
+# ---------------------------------------------------------
+
+# A. Discount Percentage: Remove '%' and convert to float
+if 'discount_percentage' in df.columns:
+    df['discount_percentage'] = (
+        df['discount_percentage']
+        .astype(str)
+        .str.replace('%', '', regex=False)
+        .str.strip()
+    )
+    df['discount_percentage'] = pd.to_numeric(df['discount_percentage'], errors='coerce')
+
+# B. Rating Count: Remove ',' and convert to int
+# Example: "24,269" -> 24269
+if 'rating_count' in df.columns:
+    df['rating_count'] = (
+        df['rating_count']
+        .astype(str)
+        .str.replace(',', '', regex=False)
+    )
+    # Fill missing values with 0 before converting
+    df['rating_count'] = pd.to_numeric(df['rating_count'], errors='coerce').fillna(0).astype(int)
+
+# C. Rating: Fix the specific data error where value is "|"
+# This matches non-numeric characters and turns them into NaN
+if 'rating' in df.columns:
+    df['rating'] = pd.to_numeric(df['rating'], errors='coerce').fillna(0)
+
+print("Additional numerical columns cleaned.")
+
+# ---------------------------------------------------------
+# 3. CATEGORY SPLITTING
+# ---------------------------------------------------------
+# The 'category' column looks like: "Computers|Accessories|Cables"
+# We split this into separate columns for better analysis.
+if 'category' in df.columns:
+    # Split by pipe '|'
+    cat_split = df['category'].str.split('|', expand=True)
+
+    # Take the first 3 levels (adjust if you need more)
+    if cat_split.shape[1] > 0: df['main_category'] = cat_split[0]
+    if cat_split.shape[1] > 1: df['sub_category_1'] = cat_split[1]
+    if cat_split.shape[1] > 2: df['sub_category_2'] = cat_split[2]
+
+    print("Categories split successfully.")
+
+# ---------------------------------------------------------
+# 4. TEXT PRE-PROCESSING (NLP)
+# ---------------------------------------------------------
+# Prepares 'review_content' and 'review_title' for AI/Sentiment Analysis
+
+# Download necessary NLTK data (run once)
+nltk.download('stopwords', quiet=True)
 stop_words = set(stopwords.words('english'))
 stemmer = PorterStemmer()
 
 
-def preprocess_text(text):
+def clean_text(text):
     if not isinstance(text, str):
         return ""
 
-    # 1. Lowercase
+    # 1. Remove Emojis
+    text = emoji.replace_emoji(text, replace='')
+
+    # 2. Lowercase
     text = text.lower()
 
-    # 2. Remove HTML tags (if any) and special characters/numbers
+    # 3. Remove HTML tags (<br>, etc.)
     text = re.sub(r'<.*?>', '', text)
+
+    # 4. Remove special characters (punctuation, numbers)
     text = re.sub(r'[^a-zA-Z\s]', '', text)
 
-    # 3. Tokenize (split into words)
+    # 5. Tokenization, Stopword Removal & Stemming
+    # "Running" -> "run", "The" -> removed
     words = text.split()
-
-    # 4. Remove Stopwords and Stemming
     cleaned_words = [stemmer.stem(word) for word in words if word not in stop_words]
 
     return " ".join(cleaned_words)
 
 
-# Apply to review_content
-df['cleaned_review'] = df['review_content'].apply(preprocess_text)
+# Apply to text columns
+text_cols = ['review_content', 'review_title', 'about_product']
 
-print(df[['review_content', 'cleaned_review']].head())
-
-# Split the category string by the pipe symbol '|'
-# This creates new columns: Main Category, Sub Category 1, etc.
-category_split = df['category'].str.split('|', expand=True)
-
-# Rename the first few columns (depending on how deep the hierarchy goes)
-df['main_category'] = category_split[0]
-df['sub_category_1'] = category_split[1]
-df['sub_category_2'] = category_split[2]
-
-# Drop the original messy category column if you want
-# df.drop(columns=['category'], inplace=True)
-
-print(df[['main_category', 'sub_category_1']].head())
-
-# Check for duplicates based on product_id
-duplicates = df.duplicated(subset=['product_id']).sum()
-print(f"Duplicates found: {duplicates}")
-
-# Remove them
-df = df.drop_duplicates(subset=['product_id'])
-
-df.to_csv("amazon_preprocessed.csv", index=False)
-
-import emoji
-
-# 1. Load the dataset
-try:
-    df = pd.read_csv('amazon_preprocessed.csv')
-    print("File loaded successfully.")
-except FileNotFoundError:
-    print("Error: File not found. Make sure 'amazon_preprocessed.csv' is in the folder.")
-    exit()
-
-# 2. Define the emoji removal function
-def remove_emojis(text):
-    # Check if the value is a string (to avoid errors on empty/NaN cells)
-    if isinstance(text, str):
-        # replace_emoji searches for emoji characters and replaces them with "" (nothing)
-        return emoji.replace_emoji(text, replace='')
-    return text
-
-# 3. Apply to specific text columns
-# These are the columns most likely to contain emojis in your dataset
-cols_to_clean = ['review_content', 'review_title', 'about_product', 'product_name']
-
-for col in cols_to_clean:
+print("Starting NLP processing (this may take a moment)...")
+for col in text_cols:
     if col in df.columns:
-        # Apply the function row by row
-        df[col] = df[col].apply(remove_emojis)
-        print(f"Cleaned emojis from column: {col}")
+        # Create new columns prefixed with 'clean_'
+        df[f'clean_{col}'] = df[col].apply(clean_text)
 
-# 4. Save the clean version
-output_filename = 'amazon_no_emojis.csv'
-df.to_csv(output_filename, index=False)
+# ---------------------------------------------------------
+# 5. SAVE FINAL RESULT
+# ---------------------------------------------------------
+output_file = 'amazon_final_processed.csv'
+df.to_csv(output_file, index=False)
 
-print(f"Done! Saved cleaned file as: {output_filename}")
+print(f"Done! Final processed file saved to: {output_file}")
+print(f"Final Columns: {df.columns.tolist()}")
