@@ -94,3 +94,37 @@ print(f"Duplicates found: {duplicates}")
 df = df.drop_duplicates(subset=['product_id'])
 
 df.to_csv("amazon_preprocessed.csv", index=False)
+
+import emoji
+
+# 1. Load the dataset
+try:
+    df = pd.read_csv('amazon_preprocessed.csv')
+    print("File loaded successfully.")
+except FileNotFoundError:
+    print("Error: File not found. Make sure 'amazon_preprocessed.csv' is in the folder.")
+    exit()
+
+# 2. Define the emoji removal function
+def remove_emojis(text):
+    # Check if the value is a string (to avoid errors on empty/NaN cells)
+    if isinstance(text, str):
+        # replace_emoji searches for emoji characters and replaces them with "" (nothing)
+        return emoji.replace_emoji(text, replace='')
+    return text
+
+# 3. Apply to specific text columns
+# These are the columns most likely to contain emojis in your dataset
+cols_to_clean = ['review_content', 'review_title', 'about_product', 'product_name']
+
+for col in cols_to_clean:
+    if col in df.columns:
+        # Apply the function row by row
+        df[col] = df[col].apply(remove_emojis)
+        print(f"Cleaned emojis from column: {col}")
+
+# 4. Save the clean version
+output_filename = 'amazon_no_emojis.csv'
+df.to_csv(output_filename, index=False)
+
+print(f"Done! Saved cleaned file as: {output_filename}")
