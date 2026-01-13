@@ -108,7 +108,9 @@ for col in text_cols:
 # 5. SAVE FINAL RESULT
 # ---------------------------------------------------------
 output_file = 'amazon_final_processed.csv'
-df.to_csv(output_file, index=False)
+output_file_json = 'amazon_final_processed.json'
+df.to_csv(output_file)
+df.to_json(output_file_json)
 
 print(f"Done! Final processed file saved to: {output_file}")
 print(f"Final Columns: {df.columns.tolist()}")
