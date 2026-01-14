@@ -4,7 +4,7 @@ import re
 import emoji
 import nltk
 from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer
+from nltk.stem import WordNetLemmatizer
 
 # ---------------------------------------------------------
 # 1. LOAD THE DATA (Output from your previous code)
@@ -67,9 +67,11 @@ if 'category' in df.columns:
 
 # Download necessary NLTK data (run once)
 nltk.download('stopwords', quiet=True)
-stop_words = set(stopwords.words('english'))
-stemmer = PorterStemmer()
+nltk.download('wordnet', quiet=True) # CHANGED: Download wordnet for lemmatization
+nltk.download('omw-1.4', quiet=True)
 
+stop_words = set(stopwords.words('english'))
+lemmatizer = WordNetLemmatizer() # CHANGED: Initialize Lemmatizer
 
 def clean_text(text):
     if not isinstance(text, str):
@@ -87,13 +89,14 @@ def clean_text(text):
     # 4. Remove special characters (punctuation, numbers)
     text = re.sub(r'[^a-zA-Z\s]', '', text)
 
-    # 5. Tokenization, Stopword Removal & Stemming
-    # "Running" -> "run", "The" -> removed
+    # 5. Tokenization, Stopword Removal & Lemmatization
     words = text.split()
-    cleaned_words = [stemmer.stem(word) for word in words if word not in stop_words]
+
+    # CHANGED: Use lemmatize() instead of stem().
+    # This keeps "cable" as "cable" and "cables" as "cable", rather than "cabl".
+    cleaned_words = [lemmatizer.lemmatize(word) for word in words if word not in stop_words]
 
     return " ".join(cleaned_words)
-
 
 # Apply to text columns
 text_cols = ['review_content', 'review_title', 'about_product']
@@ -109,8 +112,8 @@ for col in text_cols:
 # ---------------------------------------------------------
 output_file = 'amazon_final_processed.csv'
 output_file_json = 'amazon_final_processed.json'
-df.to_csv(output_file)
-df.to_json(output_file_json)
+df.to_csv(output_file, index=False)
+df.to_json(output_file_json, orient='records')
 
 print(f"Done! Final processed file saved to: {output_file}")
 print(f"Final Columns: {df.columns.tolist()}")
