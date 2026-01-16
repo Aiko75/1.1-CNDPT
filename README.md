@@ -1,10 +1,35 @@
+II. Đề cương chi tiết (Nội dung cho file .docx)
+1. Giới thiệu bài toán & ý nghĩa thực tiễn
+Bài toán: Phân tích hành vi và phản hồi của người dùng đối với các sản phẩm trên nền tảng thương mại điện tử Amazon.
+Ý nghĩa: Giúp doanh nghiệp hiểu được mong muốn của khách hàng, nhận diện các vấn đề về chất lượng sản phẩm thông qua review và tối ưu hóa chiến lược giảm giá.
+2. Mô tả nguồn dữ liệu & phương pháp thu thập
+Nguồn: Bộ dữ liệu "Amazon Sales Dataset" từ Kaggle (1,465 bản ghi).
+Phương pháp: Tải dữ liệu tự động thông qua API kagglehub và quản lý bằng thư viện Pandas.
+3. Tiền xử lý dữ liệu
+Làm sạch: Xóa bỏ các ký tự đặc biệt trong cột giá (₹, â‚¹), xử lý giá trị thiếu (NaN) và loại bỏ trùng lặp.
+Chuẩn hóa văn bản: Chuyển về chữ thường, loại bỏ Emoji, HTML tags, và sử dụng lemmatization để đưa từ về gốc (ví dụ: "charging" -> "charge").
+
+4. Phân tích dữ liệu mô tả (EDA)
+Thống kê: Điểm Rating trung bình đạt 4.09/5, cho thấy mức độ hài lòng của khách hàng rất cao.
+Xu hướng: Các sản phẩm thuộc danh mục Phụ kiện điện tử (Cáp, Sạc) chiếm số lượng áp đảo.
+Tương quan: Mức giảm giá sâu không phải lúc nào cũng mang lại Rating cao tuyệt đối, người dùng quan tâm nhiều hơn đến công năng sử dụng.
+5. Áp dụng khai thác dữ liệu
+Sentiment Analysis: Sử dụng thuật toán VADER xác định được 1,421 phản hồi tích cực, chỉ có 34 phản hồi tiêu cực.
+Clustering (K-Means): Phân dữ liệu thành 3 nhóm lớn. Nhóm lớn nhất (Cluster 2) tập trung vào các thiết bị ngoại vi và cáp kết nối.
+Topic Modeling (LDA): Trích xuất được 5 chủ đề chính bao gồm: Đồ gia dụng, Văn phòng phẩm, Thiết bị sạc nhanh, Cáp USB và Trải nghiệm người dùng chung.
+6. Kết quả & nhận xét
+Kết quả: Hệ thống đã tự động phân loại được khối lượng lớn văn bản review sang các dạng nhãn định lượng.
+Nhận xét: Khách hàng trên Amazon cực kỳ ưu ái các sản phẩm sạc nhanh và cáp kết nối. Các review tiêu cực (34 bản ghi) cần được lọc riêng để xử lý các vấn đề về lỗi kỹ thuật sản phẩm.
+7. Kết luận và hướng phát triển
+Kết luận: Machine Learning giúp tự động hóa quá trình giám sát chất lượng sản phẩm từ phản hồi khách hàng.
+Hướng phát triển: Áp dụng các mô hình học sâu (Deep Learning) như BERT để phân tích cảm xúc chính xác hơn hoặc xây dựng hệ thống gợi ý sản phẩm (Recommendation System) dựa trên các Cluster đã tìm được.
+
 Phân tích code đề tài khai thác và phân tích xu hướng đánh giá sản phẩm từ dữ liệu thương mại điện tử.
 Do thầy cho phép sử dụng dataset công khai, ở đây ta sẽ sử dụng dataset từ trên kaggle.
 Bước 1 sẽ là thu thập dataset từ trên kaggle
 
 import kagglehub
 
-# Download latest version
 path = kagglehub.dataset_download("karkavelrajaj/amazon-sales-dataset")
 
 print("Path to dataset files:", path)
@@ -54,17 +79,9 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
-# ---------------------------------------------------------
-# 1. LOAD THE DATA (Output from your previous code)
-# ---------------------------------------------------------
 df = pd.read_csv('amazon_cleaned.csv')
 print(f"Loaded data. Shape: {df.shape}")
 
-# ---------------------------------------------------------
-# 2. CLEANING NUMERICAL COLUMNS (That were skipped previously)
-# ---------------------------------------------------------
-
-# A. Discount Percentage: Remove '%' and convert to float
 if 'discount_percentage' in df.columns:
     df['discount_percentage'] = (
         df['discount_percentage']
@@ -74,8 +91,6 @@ if 'discount_percentage' in df.columns:
     )
     df['discount_percentage'] = pd.to_numeric(df['discount_percentage'], errors='coerce')
 
-# B. Rating Count: Remove ',' and convert to int
-# Example: "24,269" -> 24269
 if 'rating_count' in df.columns:
     df['rating_count'] = (
         df['rating_count']
@@ -85,35 +100,21 @@ if 'rating_count' in df.columns:
     # Fill missing values with 0 before converting
     df['rating_count'] = pd.to_numeric(df['rating_count'], errors='coerce').fillna(0).astype(int)
 
-# C. Rating: Fix the specific data error where value is "|"
-# This matches non-numeric characters and turns them into NaN
 if 'rating' in df.columns:
     df['rating'] = pd.to_numeric(df['rating'], errors='coerce').fillna(0)
 
 print("Additional numerical columns cleaned.")
 
-# ---------------------------------------------------------
-# 3. CATEGORY SPLITTING
-# ---------------------------------------------------------
-# The 'category' column looks like: "Computers|Accessories|Cables"
-# We split this into separate columns for better analysis.
 if 'category' in df.columns:
     # Split by pipe '|'
     cat_split = df['category'].str.split('|', expand=True)
 
-    # Take the first 3 levels (adjust if you need more)
     if cat_split.shape[1] > 0: df['main_category'] = cat_split[0]
     if cat_split.shape[1] > 1: df['sub_category_1'] = cat_split[1]
     if cat_split.shape[1] > 2: df['sub_category_2'] = cat_split[2]
-    
+
     print("Categories split successfully.")
 
-# ---------------------------------------------------------
-# 4. TEXT PRE-PROCESSING (NLP)
-# ---------------------------------------------------------
-# Prepares 'review_content' and 'review_title' for AI/Sentiment Analysis
-
-# Download necessary NLTK data (run once)
 nltk.download('stopwords', quiet=True)
 nltk.download('wordnet', quiet=True) # CHANGED: Download wordnet for lemmatization
 nltk.download('omw-1.4', quiet=True)
@@ -125,28 +126,20 @@ def clean_text(text):
     if not isinstance(text, str):
         return ""
 
-    # 1. Remove Emojis
     text = emoji.replace_emoji(text, replace='')
 
-    # 2. Lowercase
     text = text.lower()
 
-    # 3. Remove HTML tags (<br>, etc.)
     text = re.sub(r'<.*?>', '', text)
 
-    # 4. Remove special characters (punctuation, numbers)
     text = re.sub(r'[^a-zA-Z\s]', '', text)
 
-    # 5. Tokenization, Stopword Removal & Lemmatization
     words = text.split()
 
-    # CHANGED: Use lemmatize() instead of stem().
-    # This keeps "cable" as "cable" and "cables" as "cable", rather than "cabl".
     cleaned_words = [lemmatizer.lemmatize(word) for word in words if word not in stop_words]
 
     return " ".join(cleaned_words)
 
-# Apply to text columns
 text_cols = ['review_content', 'review_title', 'about_product']
 
 print("Starting NLP processing (this may take a moment)...")
@@ -155,9 +148,6 @@ for col in text_cols:
         # Create new columns prefixed with 'clean_'
         df[f'clean_{col}'] = df[col].apply(clean_text)
 
-# ---------------------------------------------------------
-# 5. SAVE FINAL RESULT
-# ---------------------------------------------------------
 output_file = 'amazon_final_processed.csv'
 output_file_json = 'amazon_final_processed.json'
 df.to_csv(output_file, index=False)
