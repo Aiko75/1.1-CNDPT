@@ -1,119 +1,85 @@
 import pandas as pd
-import numpy as np
 import re
-import emoji
-import nltk
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
+import os
+from underthesea import word_tokenize
 
-# ---------------------------------------------------------
-# 1. LOAD THE DATA (Output from your previous code)
-# ---------------------------------------------------------
-df = pd.read_csv('amazon_cleaned.csv')
-print(f"Loaded data. Shape: {df.shape}")
+# --- CẤU HÌNH ---
+INPUT_FILE = '../buoc-2/bao_cao_tiki.xlsx'
+OUTPUT_FILE = 'tiki_cleaned_final.xlsx'
 
-# ---------------------------------------------------------
-# 2. CLEANING NUMERICAL COLUMNS (That were skipped previously)
-# ---------------------------------------------------------
 
-# A. Discount Percentage: Remove '%' and convert to float
-if 'discount_percentage' in df.columns:
-    df['discount_percentage'] = (
-        df['discount_percentage']
-        .astype(str)
-        .str.replace('%', '', regex=False)
-        .str.strip()
-    )
-    df['discount_percentage'] = pd.to_numeric(df['discount_percentage'], errors='coerce')
+def xu_ly_review_tiki():
+    if not os.path.exists(INPUT_FILE):
+        print(f"❌ Lỗi: Không tìm thấy file '{INPUT_FILE}'")
+        return
 
-# B. Rating Count: Remove ',' and convert to int
-# Example: "24,269" -> 24269
-if 'rating_count' in df.columns:
-    df['rating_count'] = (
-        df['rating_count']
-        .astype(str)
-        .str.replace(',', '', regex=False)
-    )
-    # Fill missing values with 0 before converting
-    df['rating_count'] = pd.to_numeric(df['rating_count'], errors='coerce').fillna(0).astype(int)
+    print(">>> 1. Đang đọc dữ liệu...")
+    df = pd.read_excel(INPUT_FILE)
 
-# C. Rating: Fix the specific data error where value is "|"
-# This matches non-numeric characters and turns them into NaN
-if 'rating' in df.columns:
-    df['rating'] = pd.to_numeric(df['rating'], errors='coerce').fillna(0)
+    # Gộp Title và Content để xử lý một thể
+    df['full_text'] = df['title'].fillna('') + " " + df['content'].fillna('')
 
-print("Additional numerical columns cleaned.")
+    # Lọc bỏ dòng trống
+    df = df[df['full_text'].str.strip() != ""]
 
-# ---------------------------------------------------------
-# 3. CATEGORY SPLITTING
-# ---------------------------------------------------------
-# The 'category' column looks like: "Computers|Accessories|Cables"
-# We split this into separate columns for better analysis.
-if 'category' in df.columns:
-    # Split by pipe '|'
-    cat_split = df['category'].str.split('|', expand=True)
+    print(">>> 2. Đang tiền xử lý văn bản theo yêu cầu...")
 
-    # Take the first 3 levels (adjust if you need more)
-    if cat_split.shape[1] > 0: df['main_category'] = cat_split[0]
-    if cat_split.shape[1] > 1: df['sub_category_1'] = cat_split[1]
-    if cat_split.shape[1] > 2: df['sub_category_2'] = cat_split[2]
+    def clean_text_custom(text):
+        if not isinstance(text, str):
+            return ""
 
-    print("Categories split successfully.")
+        # 1. Chuyển thành chữ thường
+        text = text.lower()
 
-# ---------------------------------------------------------
-# 4. TEXT PRE-PROCESSING (NLP)
-# ---------------------------------------------------------
-# Prepares 'review_content' and 'review_title' for AI/Sentiment Analysis
+        # 2. Xử lý URL (Xóa link http...)
+        text = re.sub(r'http\S+|www\S+', ' ', text)
 
-# Download necessary NLTK data (run once)
-nltk.download('stopwords', quiet=True)
-nltk.download('wordnet', quiet=True) # CHANGED: Download wordnet for lemmatization
-nltk.download('omw-1.4', quiet=True)
+        # 3. Xử lý Ký tự lặp (Spam)
+        # Tìm ký tự lặp lại từ 3 lần trở lên -> Rút gọn còn 1 lần
+        # VD: "tốtttttt" -> "tốt", "đẹppppp" -> "đẹp"
+        # Logic: \1 là ký tự tìm thấy, {2,} là lặp thêm 2 lần nữa (tổng >= 3)
+        text = re.sub(r'([a-zÀ-ỹ])\1{2,}', r'\1', text)
 
-stop_words = set(stopwords.words('english'))
-lemmatizer = WordNetLemmatizer() # CHANGED: Initialize Lemmatizer
+        # 4. Xử lý Ký tự lạ + Icon + Lỗi dính dấu câu
+        # Thay thế TẤT CẢ ký tự không phải chữ cái (icon, *, !, ,, .) bằng DẤU CÁCH
+        # Việc này đồng thời tách các từ bị dính (VD: "đẹp,giao" -> "đẹp giao")
+        text = re.sub(r"[^a-zA-ZÀ-ỹ\s]", " ", text)
 
-def clean_text(text):
-    if not isinstance(text, str):
-        return ""
+        # 5. Xử lý khoảng trắng thừa (do bước 4 tạo ra)
+        # VD: "hàng    tốt" -> "hàng tốt"
+        text = re.sub(r'\s+', ' ', text).strip()
 
-    # 1. Remove Emojis
-    text = emoji.replace_emoji(text, replace='')
+        return text
 
-    # 2. Lowercase
-    text = text.lower()
+    # Áp dụng hàm clean
+    df["clean_text"] = df["full_text"].apply(clean_text_custom)
 
-    # 3. Remove HTML tags (<br>, etc.)
-    text = re.sub(r'<.*?>', '', text)
+    print(">>> 3. Đang tách từ tiếng Việt (Underthesea)...")
+    try:
+        df["tokens"] = df["clean_text"].apply(lambda x: word_tokenize(x, format="text"))
+    except Exception as e:
+        print(f"⚠️ Lỗi tách từ (có thể bỏ qua nếu không cần thiết): {e}")
 
-    # 4. Remove special characters (punctuation, numbers)
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
+    # --- KIỂM TRA KẾT QUẢ ---
+    print("\n=== TEST THỬ 5 DÒNG ===")
+    sample_data = [
+        "Hàng tốtttttt quá shop ơi ❤️❤️❤️",
+        "Giao hàng nhanhhhhh,đóng gói kĩ",
+        "Sản phẩm 5 sao ***** nhé !!!",
+        "hàng đẹp,giao nhanh",
+        "chat luong!!!!!"
+    ]
 
-    # 5. Tokenization, Stopword Removal & Lemmatization
-    words = text.split()
+    for line in sample_data:
+        cleaned = clean_text_custom(line)
+        print(f"Gốc: {line}")
+        print(f"Sửa: {cleaned}")
+        print("-" * 20)
 
-    # CHANGED: Use lemmatize() instead of stem().
-    # This keeps "cable" as "cable" and "cables" as "cable", rather than "cabl".
-    cleaned_words = [lemmatizer.lemmatize(word) for word in words if word not in stop_words]
+    # Lưu kết quả
+    df[['product_id', 'review_id', 'rating', 'clean_text', 'tokens']].to_excel(OUTPUT_FILE, index=False)
+    print(f"\n✅ Đã lưu file sạch vào: {OUTPUT_FILE}")
 
-    return " ".join(cleaned_words)
 
-# Apply to text columns
-text_cols = ['review_content', 'review_title', 'about_product']
-
-print("Starting NLP processing (this may take a moment)...")
-for col in text_cols:
-    if col in df.columns:
-        # Create new columns prefixed with 'clean_'
-        df[f'clean_{col}'] = df[col].apply(clean_text)
-
-# ---------------------------------------------------------
-# 5. SAVE FINAL RESULT
-# ---------------------------------------------------------
-output_file = 'amazon_final_processed.csv'
-output_file_json = 'amazon_final_processed.json'
-df.to_csv(output_file, index=False)
-df.to_json(output_file_json, orient='records')
-
-print(f"Done! Final processed file saved to: {output_file}")
-print(f"Final Columns: {df.columns.tolist()}")
+if __name__ == "__main__":
+    xu_ly_review_tiki()
