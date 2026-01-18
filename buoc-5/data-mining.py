@@ -1,83 +1,131 @@
-# Cài đặt thư viện: !pip install vaderSentiment
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
-from sklearn.decomposition import LatentDirichletAllocation
-import seaborn as sns
-import matplotlib.pyplot as plt
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-# Load dữ liệu với path mới
-df = pd.read_csv('../public/amazon_final_processed.csv')
+# =============================================================================
+# 1. LOAD DATA (FIXED)
+# =============================================================================
+# The error happened because the file is actually a CSV in this environment.
+filename = 'tiki_cleaned_final.xlsx - Sheet1.csv'
 
-# Khởi tạo bộ phân tích
+try:
+    df = pd.read_excel('tiki_cleaned_final.xlsx')
+    print("--- Data Loaded Successfully ---")
+    print(f"Total Rows: {len(df)}")
+except FileNotFoundError:
+    print(f"Error: File '{filename}' not found. Please check the directory.")
+    # Stop execution if file is missing
+    exit()
+
+# Handle missing values in text columns
+if 'clean_text' in df.columns:
+    df['clean_text'] = df['clean_text'].astype(str).fillna('')
+
+# Set global plot style
+sns.set_style("whitegrid")
+plt.rcParams['figure.figsize'] = (10, 6)
+
+# =============================================================================
+# 2. EXPLORATORY DATA ANALYSIS (EDA)
+# =============================================================================
+print("\n--- 2. Starting EDA ---")
+
+# A. Univariate Analysis: Rating Distribution
+if 'rating' in df.columns:
+    plt.figure()
+    sns.countplot(x='rating', data=df, palette='viridis')
+    plt.title('Distribution of Ratings')
+    plt.show()
+
+# B. Univariate Analysis: Word Count
+df['word_count'] = df['clean_text'].apply(lambda x: len(x.split()))
+plt.figure()
+sns.histplot(df['word_count'], bins=30, kde=True, color='skyblue')
+plt.title('Distribution of Review Length (Word Count)')
+plt.show()
+
+# C. Bivariate Analysis: Rating vs Word Count
+if 'rating' in df.columns:
+    plt.figure()
+    sns.boxplot(x='rating', y='word_count', data=df, palette='Set2')
+    plt.title('Word Count by Rating')
+    plt.show()
+
+# D. Common Words
+top_words = df['clean_text'].str.split().explode().value_counts().head(20)
+plt.figure(figsize=(12, 6))
+sns.barplot(x=top_words.values, y=top_words.index, palette='magma')
+plt.title('Top 20 Most Frequent Words')
+plt.show()
+
+# =============================================================================
+# 3. DATA MINING (TF-IDF & K-MEANS)
+# =============================================================================
+print("\n--- 3. Starting Data Mining ---")
+
+# A. TF-IDF Vectorization
+vectorizer = TfidfVectorizer(max_features=1000)
+X = vectorizer.fit_transform(df['clean_text'])
+print(f"TF-IDF Matrix Shape: {X.shape}")
+
+# B. K-Means Clustering
+k = 3
+kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+kmeans.fit(X)
+df['cluster'] = kmeans.labels_
+
+# Show top terms per cluster
+print("Top terms per cluster:")
+order_centroids = kmeans.cluster_centers_.argsort()[:, ::-1]
+terms = vectorizer.get_feature_names_out()
+for i in range(k):
+    print(f"Cluster {i}: ", end='')
+    for ind in order_centroids[i, :10]:
+        print(f'{terms[ind]} ', end='')
+    print()
+
+# =============================================================================
+# 4. EMOTIONAL ANALYSIS (SENTIMENT)
+# =============================================================================
+print("\n--- 4. Starting Emotional Analysis ---")
+
 analyzer = SentimentIntensityAnalyzer()
 
-# Áp dụng phân tích cảm xúc lên cột clean_review_content
-# Compound score: > 0.05 (Tích cực), < -0.05 (Tiêu cực), còn lại là Trung tính
-df["sentiment_score"] = df["clean_review_content"].apply(
-    lambda x: analyzer.polarity_scores(str(x))["compound"]
+# A. Calculate Score
+df["sentiment_score"] = df["clean_text"].apply(
+    lambda x: analyzer.polarity_scores(x)["compound"]
 )
 
-# Phân loại nhãn cảm xúc
-def label_sentiment(score):
-    if score >= 0.05: return "Positive"
-    elif score <= -0.05: return "Negative"
-    else: return "Neutral"
+# B. Classify Emotion
+def classify_emotion(score):
+    if score >= 0.05:
+        return 'Positive'
+    elif score <= -0.05:
+        return 'Negative'
+    else:
+        return 'Neutral'
 
-df["sentiment_label"] = df["sentiment_score"].apply(label_sentiment)
+df['emotion_label'] = df['sentiment_score'].apply(classify_emotion)
 
-print("--- Kết quả phân tích cảm xúc ---")
-print(df["sentiment_label"].value_counts())
-
-# 1. Chuyển đổi văn bản thành vector số bằng TF-IDF
-# Giới hạn 1000 đặc trưng quan trọng nhất
-vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
-X = vectorizer.fit_transform(df["clean_review_content"].fillna(""))
-
-# 2. Áp dụng KMeans để chia làm 3 cụm (ví dụ: Chất lượng, Giá cả, Giao hàng)
-kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
-df["cluster"] = kmeans.fit_predict(X)
-
-print("\n--- Số lượng bản ghi trong mỗi cụm ---")
-print(df["cluster"].value_counts())
-
-# Sử dụng ma trận X từ bước TF-IDF ở trên
-lda = LatentDirichletAllocation(n_components=5, random_state=42)
-lda.fit(X)
-
-# Hàm hiển thị các từ khóa của từng chủ đề
-def display_topics(model, feature_names, no_top_words):
-    for topic_idx, topic in enumerate(model.components_):
-        print(f"Topic {topic_idx}:")
-        print(" ".join([feature_names[i] for i in topic.argsort()[:-no_top_words - 1:-1]]))
-
-print("\n--- Các chủ đề chính được tìm thấy ---")
-display_topics(lda, vectorizer.get_feature_names_out(), 10)
-
-# Tạo layout 1 hàng 3 cột để so sánh
-fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-
-# 1. BIỂU ĐỒ PHÂN BỐ CỤM (Clustering Distribution)
-# Dựa trên Log: Cluster 2 chiếm ưu thế với 1053 bản ghi
-sns.countplot(x="cluster", data=df, ax=axes[0], palette="magma")
-axes[0].set_title("Phân bố các cụm sản phẩm (K-Means)", fontsize=14)
-axes[0].set_xlabel("Cụm (Cluster)")
-axes[0].set_ylabel("Số lượng sản phẩm")
-
-# 2. BIỂU ĐỒ CẢM XÚC (Sentiment Analysis)
-# Dựa trên Log: Positive (1421), Negative (34), Neutral (10)
-sns.countplot(x="sentiment_label", data=df, ax=axes[1], order=["Positive", "Neutral", "Negative"], palette="viridis")
-axes[1].set_title("Tỷ lệ cảm xúc người dùng (VADER)", fontsize=14)
-axes[1].set_xlabel("Trạng thái cảm xúc")
-axes[1].set_ylabel("Số lượng Review")
-
-# 3. BIỂU ĐỒ MỐI QUAN HỆ GIỮA CỤM VÀ RATING
-# Kiểm tra xem các cụm khác nhau có mức điểm đánh giá khác nhau không
-sns.boxplot(x="cluster", y="rating", data=df, ax=axes[2], palette="Set2")
-axes[2].set_title("Phân bổ điểm Rating theo từng Cụm", fontsize=14)
-axes[2].set_xlabel("Cụm")
-axes[2].set_ylabel("Điểm Rating")
-
-plt.tight_layout()
+# C. Visualization: Emotion Distribution
+plt.figure()
+sns.countplot(x='emotion_label', data=df, palette='coolwarm',
+              order=['Negative', 'Neutral', 'Positive'])
+plt.title('Distribution of Emotions')
 plt.show()
+
+# D. Visualization: Emotion vs Rating
+if 'rating' in df.columns:
+    plt.figure()
+    sns.boxplot(x='emotion_label', y='rating', data=df, palette='Set2',
+                order=['Negative', 'Neutral', 'Positive'])
+    plt.title('Relationship between Emotion and Rating')
+    plt.show()
+
+# Save final result
+output_file = 'tiki_final_analysis_complete.csv'
+df.to_csv(output_file, index=False, encoding='utf-8-sig')
+print(f"\nAll steps completed. Final data saved to '{output_file}'")
