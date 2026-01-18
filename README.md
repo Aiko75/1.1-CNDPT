@@ -1,169 +1,95 @@
-II. Đề cương chi tiết (Nội dung cho file .docx)
-1. Giới thiệu bài toán & ý nghĩa thực tiễn
-Bài toán: Phân tích hành vi và phản hồi của người dùng đối với các sản phẩm trên nền tảng thương mại điện tử Amazon.
-Ý nghĩa: Giúp doanh nghiệp hiểu được mong muốn của khách hàng, nhận diện các vấn đề về chất lượng sản phẩm thông qua review và tối ưu hóa chiến lược giảm giá.
-2. Mô tả nguồn dữ liệu & phương pháp thu thập
-Nguồn: Bộ dữ liệu "Amazon Sales Dataset" từ Kaggle (1,465 bản ghi).
-Phương pháp: Tải dữ liệu tự động thông qua API kagglehub và quản lý bằng thư viện Pandas.
-3. Tiền xử lý dữ liệu
-Làm sạch: Xóa bỏ các ký tự đặc biệt trong cột giá (₹, â‚¹), xử lý giá trị thiếu (NaN) và loại bỏ trùng lặp.
-Chuẩn hóa văn bản: Chuyển về chữ thường, loại bỏ Emoji, HTML tags, và sử dụng lemmatization để đưa từ về gốc (ví dụ: "charging" -> "charge").
+# Tiki Reviews Scraping & Analysis Pipeline 🛒📊
 
-4. Phân tích dữ liệu mô tả (EDA)
-Thống kê: Điểm Rating trung bình đạt 4.09/5, cho thấy mức độ hài lòng của khách hàng rất cao.
-Xu hướng: Các sản phẩm thuộc danh mục Phụ kiện điện tử (Cáp, Sạc) chiếm số lượng áp đảo.
-Tương quan: Mức giảm giá sâu không phải lúc nào cũng mang lại Rating cao tuyệt đối, người dùng quan tâm nhiều hơn đến công năng sử dụng.
-5. Áp dụng khai thác dữ liệu
-Sentiment Analysis: Sử dụng thuật toán VADER xác định được 1,421 phản hồi tích cực, chỉ có 34 phản hồi tiêu cực.
-Clustering (K-Means): Phân dữ liệu thành 3 nhóm lớn. Nhóm lớn nhất (Cluster 2) tập trung vào các thiết bị ngoại vi và cáp kết nối.
-Topic Modeling (LDA): Trích xuất được 5 chủ đề chính bao gồm: Đồ gia dụng, Văn phòng phẩm, Thiết bị sạc nhanh, Cáp USB và Trải nghiệm người dùng chung.
-6. Kết quả & nhận xét
-Kết quả: Hệ thống đã tự động phân loại được khối lượng lớn văn bản review sang các dạng nhãn định lượng.
-Nhận xét: Khách hàng trên Amazon cực kỳ ưu ái các sản phẩm sạc nhanh và cáp kết nối. Các review tiêu cực (34 bản ghi) cần được lọc riêng để xử lý các vấn đề về lỗi kỹ thuật sản phẩm.
-7. Kết luận và hướng phát triển
-Kết luận: Machine Learning giúp tự động hóa quá trình giám sát chất lượng sản phẩm từ phản hồi khách hàng.
-Hướng phát triển: Áp dụng các mô hình học sâu (Deep Learning) như BERT để phân tích cảm xúc chính xác hơn hoặc xây dựng hệ thống gợi ý sản phẩm (Recommendation System) dựa trên các Cluster đã tìm được.
+Dự án này là một quy trình tự động hóa (Pipeline) hoàn chỉnh để thu thập, quản lý và tiền xử lý dữ liệu đánh giá sản phẩm từ Tiki.vn. Hệ thống bao gồm 3 giai đoạn chính: Cào dữ liệu (Scraping), Quản lý & Thống kê (Management), và Tiền xử lý văn bản (Preprocessing).
 
-Phân tích code đề tài khai thác và phân tích xu hướng đánh giá sản phẩm từ dữ liệu thương mại điện tử.
-Do thầy cho phép sử dụng dataset công khai, ở đây ta sẽ sử dụng dataset từ trên kaggle.
-Bước 1 sẽ là thu thập dataset từ trên kaggle
+## 📦 Yêu cầu cài đặt (Prerequisites)
 
-import kagglehub
+Trước khi chạy, hãy đảm bảo bạn đã cài đặt Python và các thư viện cần thiết:
 
-path = kagglehub.dataset_download("karkavelrajaj/amazon-sales-dataset")
+```bash
+pip install requests pandas openpyxl underthesea matplotlib
 
-print("Path to dataset files:", path)
+```
 
-Dòng code trên sẽ tiến hành tải dataset trên kaggle mà ta đã chọn, sau đó sẽ in ra path dẫn đến dataset mà ta đã tải về.
-Bước 2 sẽ là lưu trữ và tiền xử lý đơn giản dataset
+---
 
-import pandas as pd
+## 🚀 QUY TRÌNH THỰC HIỆN
 
-df = pd.read_csv("amazon.csv", encoding="utf-8")
+### GIAI ĐOẠN 1: Thu thập dữ liệu (Data Collection)
 
-price_cols = ["discounted_price", "actual_price"]
+Giai đoạn này chịu trách nhiệm lấy dữ liệu thô từ API của Tiki và chuyển đổi sang định dạng bảng (CSV).
 
-for col in price_cols:
-    df[col] = (
-        df[col]
-        .astype(str)
-        .str.replace("₹", "", regex=False)
-        .str.replace("â‚¹", "", regex=False)
-        .str.replace(",", "", regex=False)
-        .str.strip()
-    )
+#### 1. Lấy danh sách sản phẩm (`fetch_tiki_api.py`)
 
-for col in price_cols:
-    df[col] = pd.to_numeric(df[col], errors="coerce")
+* **Chức năng:** Kết nối đến API `widgets/top_choise` của Tiki để lấy danh sách các sản phẩm đang bán chạy/nổi bật.
+* **Kỹ thuật:** Sử dụng Fake Headers (User-Agent, Referer) để giả lập trình duyệt, vượt qua cơ chế chặn bot cơ bản.
+* **Output:** File `tiki_top_choice.json` chứa thông tin cơ bản (ID, Seller ID, SKU) của các sản phẩm.
 
-print(df[price_cols].head())
-print(df[price_cols].dtypes)
+#### 2. Cào đánh giá chi tiết (`fetch_tiki_reviews.py`)
 
-df.info()
-df.drop_duplicates(inplace=True)
-df.isna().sum()
+* **Chức năng:** Đọc danh sách sản phẩm từ file JSON ở bước trên. Gửi request đến API Reviews của Tiki để lấy comment cho từng sản phẩm.
+* **Kỹ thuật:**
+* Tự động tạo thư mục `tiki_reviews_data`.
+* Sử dụng cơ chế **Random Sleep (1-3 giây)** giữa các lần gọi để tránh bị khóa IP.
+* Lưu trữ review của mỗi sản phẩm thành một file JSON riêng biệt để đảm bảo an toàn dữ liệu.
 
-df.to_csv("amazon_cleaned.csv", index=False)
 
-Ở trong bước này, ta sẽ gọi lên dataset mà ta đã tải về, sau đó, tiến hành tiền xử lý đơn giản như tiến hành loại bỏ các kí đặc biệt trong cột discounted_price và cột actual_price.
-Sau khi loại bỏ kí hiệu đặc biệt khỏi 2 cột trên, code tiến hành lọc và bỏ các duplicates có trong dataset.
-Cuối cùng,code tạo ra dataset mới gọi là amazon_cleaned.csv
+* **Output:** Thư mục `tiki_reviews_data/` chứa hàng loạt file `review_{id}.json`.
 
-Ở bước thứ 3, ta tiến hành thực hiện tiền xử lý dữ liệu có trong dataset.
+#### 3. Gộp dữ liệu (`tong_hop_reviews.py`)
 
-import pandas as pd
-import numpy as np
-import re
-import emoji
-import nltk
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
+* **Chức năng:** Quét toàn bộ thư mục `tiki_reviews_data`, đọc tất cả các file JSON lẻ và gộp chúng thành một danh sách duy nhất.
+* **Kỹ thuật:** Trích xuất chỉ các trường cần thiết, loại bỏ metadata thừa.
+* **Output:** File `tong_hop_reviews.json`.
 
-df = pd.read_csv('amazon_cleaned.csv')
-print(f"Loaded data. Shape: {df.shape}")
+#### 4. Chuyển đổi sang CSV (`json_to_csv.py`)
 
-if 'discount_percentage' in df.columns:
-    df['discount_percentage'] = (
-        df['discount_percentage']
-        .astype(str)
-        .str.replace('%', '', regex=False)
-        .str.strip()
-    )
-    df['discount_percentage'] = pd.to_numeric(df['discount_percentage'], errors='coerce')
+* **Chức năng:** Làm phẳng (Flatten) cấu trúc JSON lồng nhau. Mỗi review sẽ trở thành một dòng trong file CSV.
+* **Kỹ thuật:** Sử dụng encoding `utf-8-sig` để file CSV hiển thị đúng Tiếng Việt khi mở bằng Excel.
+* **Output:** File `tiki_reviews_final.csv`.
 
-if 'rating_count' in df.columns:
-    df['rating_count'] = (
-        df['rating_count']
-        .astype(str)
-        .str.replace(',', '', regex=False)
-    )
-    # Fill missing values with 0 before converting
-    df['rating_count'] = pd.to_numeric(df['rating_count'], errors='coerce').fillna(0).astype(int)
+---
 
-if 'rating' in df.columns:
-    df['rating'] = pd.to_numeric(df['rating'], errors='coerce').fillna(0)
+### GIAI ĐOẠN 2: Quản lý & Thống kê sơ bộ (Data Management)
 
-print("Additional numerical columns cleaned.")
+#### 5. Kiểm tra và báo cáo (`saving-and-manage.py`)
 
-if 'category' in df.columns:
-    # Split by pipe '|'
-    cat_split = df['category'].str.split('|', expand=True)
+* **Chức năng:** Sử dụng thư viện **Pandas** để đọc file CSV và thực hiện các bước làm sạch cơ bản cũng như thống kê.
+* **Các thao tác chính:**
+* Chuyển đổi Timestamp (`created_at`) sang định dạng ngày tháng (`datetime`).
+* Loại bỏ các đánh giá trùng lặp (Duplicate removal).
+* Tính điểm đánh giá trung bình (Average Rating) cho từng sản phẩm.
+* Thống kê phân bố số sao (1 sao vs 5 sao).
+* Lọc ra các review tiêu cực (1-2 sao) để kiểm tra.
 
-    if cat_split.shape[1] > 0: df['main_category'] = cat_split[0]
-    if cat_split.shape[1] > 1: df['sub_category_1'] = cat_split[1]
-    if cat_split.shape[1] > 2: df['sub_category_2'] = cat_split[2]
 
-    print("Categories split successfully.")
+* **Output:** File `bao_cao_tiki.xlsx` (Định dạng Excel dễ đọc).
 
-nltk.download('stopwords', quiet=True)
-nltk.download('wordnet', quiet=True) # CHANGED: Download wordnet for lemmatization
-nltk.download('omw-1.4', quiet=True)
+---
 
-stop_words = set(stopwords.words('english'))
-lemmatizer = WordNetLemmatizer() # CHANGED: Initialize Lemmatizer
+### GIAI ĐOẠN 3: Tiền xử lý dữ liệu (Data Preprocessing)
 
-def clean_text(text):
-    if not isinstance(text, str):
-        return ""
+#### 6. Làm sạch văn bản chuyên sâu (`preprocessing-data.py`)
 
-    text = emoji.replace_emoji(text, replace='')
+* **Chức năng:** Chuẩn bị dữ liệu văn bản sạch để phục vụ cho các bài toán AI/Machine Learning (như Phân tích cảm xúc).
+* **Các kỹ thuật xử lý NLP (Natural Language Processing):**
+* **Gộp văn bản:** Kết hợp `Tiêu đề` và `Nội dung` để có ngữ cảnh đầy đủ.
+* **Regex Cleaning:**
+* Chuyển về chữ thường.
+* Xóa URL, Link rác.
+* **Chống Spam ký tự:** Rút gọn các từ bị kéo dài (VD: "tốtttttt" -> "tốt", "đẹppppp" -> "đẹp").
+* **Xử lý ký tự lạ:** Thay thế icon, emoji, dấu câu sai quy cách bằng khoảng trắng (VD: "đẹp,giao" -> "đẹp giao").
 
-    text = text.lower()
 
-    text = re.sub(r'<.*?>', '', text)
+* **Tách từ (Tokenization):** Sử dụng thư viện `underthesea` để tách từ tiếng Việt (VD: "giao hàng" -> "giao_hàng").
 
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
 
-    words = text.split()
+* **Output:** File `tiki_cleaned_final.xlsx` (Chứa cột `tokens` và `clean_text` đã sẵn sàng train model).
 
-    cleaned_words = [lemmatizer.lemmatize(word) for word in words if word not in stop_words]
+---
 
-    return " ".join(cleaned_words)
+## ⚠️ Lưu ý quan trọng
 
-text_cols = ['review_content', 'review_title', 'about_product']
-
-print("Starting NLP processing (this may take a moment)...")
-for col in text_cols:
-    if col in df.columns:
-        # Create new columns prefixed with 'clean_'
-        df[f'clean_{col}'] = df[col].apply(clean_text)
-
-output_file = 'amazon_final_processed.csv'
-output_file_json = 'amazon_final_processed.json'
-df.to_csv(output_file, index=False)
-df.to_json(output_file_json, orient='records')
-
-print(f"Done! Final processed file saved to: {output_file}")
-print(f"Final Columns: {df.columns.tolist()}")
-
-Ở trong code trên, sau khi ta gọi dataset ta có được sau bước hai lên, ta tiến hành xử lý dữ liệu để phục vụ cho các bước sau.
-Code loại bỏ kí tự "%" và biến giá trị trong cột discounted_percentage thành float, cũng như biến giá trị cột rating_count thành int.
-Sau đó, code tiến hành xử lý các dòng có giá trị lỗi là "|".
-Sau khi hoàn thành, code tiến hành tách các cột category ra thành các cột nhỏ hơn để phục vụ cho việc phân tích dữ liệu sau này.
-Một khi hoàn thành, code sẽ tiến hành tiền xử lý text có trong dataset. 
-Ở đây, ta cần có thư viện nltk, xong từ thư viện nltk, ta import stopwords và WordNetLemmatizer
-Code tiến hành gọi stopwords và WordNetLemmatizer lên, sau đó, code tiến hành loại bỏ emoji nếu có trong cột review-content và review_title.
-Code ngoài ra còn đưa tất các text về lowercase, loại bỏ html nếu có và loại bỏ kí tự đặc biệt nếu có  và đưa text về 1 dạng thống nhất để cho xử lý dữ liệu sau nay, ví dụ như "charging" thành "charge".
-Sau khi xử lý xong, code áp dụng text đã qua xử lý vào các cột.
-Cuối cùng code tạo file dataset mới tên amazon_final_processed.csv, in ra thông báo hoàn thành và tên file .csv chứa dataset đã tiền xử lý.
-
+1. **Rate Limiting:** Trong file `fetch_tiki_reviews.py`, code đã set thời gian nghỉ ngẫu nhiên (`time.sleep`). Không nên xóa dòng này để tránh bị Tiki chặn IP.
+2. **Đường dẫn file:** Kiểm tra kỹ đường dẫn file (input/output path) trong các file code nếu bạn thay đổi cấu trúc thư mục.
+3. **Thư viện Underthesea:** Lần đầu chạy `preprocessing-data.py`, thư viện có thể cần tải model ngôn ngữ về, hãy đảm bảo có kết nối mạng.
