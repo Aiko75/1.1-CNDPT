@@ -93,3 +93,90 @@ Giai đoạn này chịu trách nhiệm lấy dữ liệu thô từ API của Ti
 1. **Rate Limiting:** Trong file `fetch_tiki_reviews.py`, code đã set thời gian nghỉ ngẫu nhiên (`time.sleep`). Không nên xóa dòng này để tránh bị Tiki chặn IP.
 2. **Đường dẫn file:** Kiểm tra kỹ đường dẫn file (input/output path) trong các file code nếu bạn thay đổi cấu trúc thư mục.
 3. **Thư viện Underthesea:** Lần đầu chạy `preprocessing-data.py`, thư viện có thể cần tải model ngôn ngữ về, hãy đảm bảo có kết nối mạng.
+
+Tất nhiên rồi. Dưới đây là phần giải thích chi tiết bằng tiếng Việt, được cập nhật để bao gồm thông tin về **file đầu vào (Input)** và **file đầu ra (Output)** cho từng bước code, dựa trên quy trình và các file bạn đã cung cấp.
+
+---
+
+### 1. File Code: `analysis.py`
+
+**Bước tương ứng:** **Phân tích dữ liệu khám phá (Exploratory Data Analysis - EDA)**
+
+Đoạn mã này tập trung vào việc hiểu sơ bộ về dữ liệu thông qua các thống kê mô tả và biểu đồ cơ bản.
+
+* **Input (File đầu vào):** `tiki_cleaned_final.xlsx`
+* Đây là file dữ liệu gốc đã được làm sạch ở các bước trước đó. Nó chứa các cột thông tin như `rating`, `clean_text` (văn bản đã làm sạch).
+
+
+* **Chức năng chính:**
+1. **Load Dữ liệu:** Đọc file CSV đầu vào bằng `pandas`.
+2. **Phân tích Đơn biến (Univariate):** Vẽ biểu đồ phân bố số sao đánh giá (Rating) và biểu đồ phân bố độ dài bình luận (tính theo số từ).
+3. **Phân tích Đa biến (Bivariate):** Vẽ biểu đồ hộp để so sánh mối quan hệ giữa Rating và độ dài bình luận.
+4. **Tìm từ khóa phổ biến:** Tách từ và đếm tần suất để tìm ra 20 từ xuất hiện nhiều nhất trong toàn bộ dữ liệu.
+
+
+* **Output (File đầu ra):** Không có. Code này chỉ hiển thị các biểu đồ và số liệu thống kê trên màn hình để bạn quan sát và phân tích.
+
+---
+
+### 2. File Code: `data-mining.py` (Kèm Phân tích cảm xúc nâng cao)
+
+**Bước tương ứng:** **Khai thác dữ liệu (Data Mining) & Phân tích cảm xúc (AI/ML Based)**
+
+Đây là đoạn mã phức tạp nhất, thực hiện các bước cốt lõi của dự án để tạo ra kết quả phân tích cuối cùng.
+
+* **Input (File đầu vào):** `tiki_cleaned_final.xlsx` (Sử dụng lại file dữ liệu đã làm sạch).
+* **Chức năng chính:**
+1. **Khai thác dữ liệu (Clustering):**
+* Sử dụng `TfidfVectorizer` để chuyển đổi văn bản thành vector số.
+* Dùng thuật toán `KMeans` để tự động chia các bình luận thành 3 cụm (nhóm) nội dung khác nhau.
+* Tạo ra một cột mới tên là `cluster` để lưu nhãn cụm cho mỗi dòng dữ liệu.
+
+
+2. **Phân tích cảm xúc (Emotional Analysis):**
+* Sử dụng thư viện `vaderSentiment` để tính điểm cảm xúc cho từng bình luận.
+* Dựa vào điểm số, phân loại thành các nhóm: "Positive" (Tích cực), "Negative" (Tiêu cực), hoặc "Neutral" (Trung tính).
+* Tạo ra hai cột mới: `sentiment_score` (điểm số) và `emotion_label` (nhãn cảm xúc).
+
+
+3. **Trực quan hóa:** Vẽ các biểu đồ để thể hiện kết quả phân tích (ví dụ: phân bố cảm xúc, quan hệ giữa cảm xúc và rating).
+
+
+* **Output (File đầu ra):** **`tiki_final_analysis_complete.csv`**
+* Đây là file CSV chứa toàn bộ dữ liệu gốc cộng thêm các cột kết quả phân tích mới (`cluster`, `sentiment_score`, `emotion_label`).
+
+
+
+---
+
+### 3. File Code: `visualization-result.py`
+
+**Bước tương ứng:** **Phân tích cảm xúc dựa trên luật (Rule-based Approach)**
+
+Đoạn mã này là một giải pháp thay thế, đơn giản hơn, dùng để phân tích cảm xúc khi bị giới hạn chỉ được dùng các thư viện cơ bản.
+
+* **Input (File đầu vào):** `tiki_cleaned_final.xlsx` (Vẫn dùng file dữ liệu đã làm sạch làm đầu vào).
+* **Chức năng chính:**
+1. **Phân tích cảm xúc dựa trên từ điển (Dictionary-Based):**
+* Bạn tự định nghĩa một danh sách các từ khóa tích cực (`positive_keywords`) và tiêu cực (`negative_keywords`).
+* Code sẽ đếm số lượng từ khóa này trong mỗi bình luận.
+* Dựa trên số lượng từ đếm được, nó gán nhãn "Positive", "Negative" hoặc "Neutral" cho bình luận đó.
+* Tạo ra một cột mới là `emotion_label` để lưu kết quả này.
+
+
+2. **Trực quan hóa:** Vẽ các biểu đồ dựa trên kết quả phân loại thủ công này.
+
+
+* **Output (File đầu ra):** **`tiki_emotion_pandas_only.csv`**
+* Đây là file CSV chứa dữ liệu gốc và cột `emotion_label` được tạo ra từ phương pháp đếm từ thủ công.
+
+
+**Tóm tắt Luồng Dữ liệu:**
+
+`tiki_cleaned_final.xlsx` (Input chung)
+|
+|---> Code 1 (`analysis.py`) ---> Hiển thị biểu đồ EDA (Không có file output)
+|
+|---> Code 2 (`data-mining.py`) ---> **Output:** `tiki_final_analysis_complete.csv` (Kết quả phân tích AI/ML đầy đủ)
+|
+|---> Code 3 (`visualization-result.py`) ---> **Output:** `tiki_emotion_pandas_only.csv` (Kết quả phân tích cảm xúc dựa trên luật đơn giản)
